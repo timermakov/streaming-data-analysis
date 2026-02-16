@@ -1,9 +1,10 @@
 import io
+import json
 import math
 
 import fastavro
 
-AVRO_SCHEMA = fastavro.parse_schema({
+AVRO_SCHEMA_DICT = {
     "type": "record",
     "name": "ECommerceTransaction",
     "namespace": "lab1",
@@ -17,7 +18,10 @@ AVRO_SCHEMA = fastavro.parse_schema({
         {"name": "CustomerID", "type": ["null", "long"], "default": None},
         {"name": "Country", "type": "string"},
     ],
-})
+}
+
+AVRO_SCHEMA = fastavro.parse_schema(AVRO_SCHEMA_DICT)
+AVRO_SCHEMA_JSON = json.dumps(AVRO_SCHEMA_DICT)
 
 
 def csv_row_to_record(row: dict) -> dict:
