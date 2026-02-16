@@ -56,7 +56,7 @@ def produce_messages(
 ) -> int:
     total_sent = 0
 
-    for chunk in pd.read_csv(csv_path, chunksize=batch_size, encoding="utf-8"):
+    for chunk in pd.read_csv(csv_path, chunksize=batch_size, encoding="latin-1"):
         if _shutdown:
             break
 

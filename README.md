@@ -25,7 +25,7 @@ E-Commerce pipeline: CSV → Kafka Producer (Avro) → Spark Structured Streamin
 # Установить зависимости
 poetry install
 
-# Запустить Kafka (KRaft mode, без Zookeeper)
+# Запустить Kafka (KRaft)
 docker compose up -d
 
 # Терминал 1: запустить consumer (Spark Streaming → Parquet)
@@ -45,6 +45,7 @@ docker compose --profile lab1 up --build
 
 ```bash
 docker compose --profile lab1 down
+docker network prune -f
 ```
 
 ### Параметры producer
