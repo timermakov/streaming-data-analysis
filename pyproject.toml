@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "streaming-data-analysis"
+version = "0.1.0"
+description = "Streaming data analysis labs: Kafka, Spark Streaming, Parquet"
+authors = []
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+confluent-kafka = "^2.6"
+fastavro = "^1.9"
+pandas = "^2.2"
+pyspark = "^4.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
