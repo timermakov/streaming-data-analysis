@@ -20,7 +20,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SPARK_KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1"
+SPARK_PACKAGES = ",".join([
+    "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1",
+    "org.apache.spark:spark-avro_2.13:4.1.1",
+])
 
 
 def create_spark_session() -> SparkSession:
@@ -28,7 +31,7 @@ def create_spark_session() -> SparkSession:
         SparkSession.builder
         .appName("ECommerceStreamConsumer")
         .master("local[*]")
-        .config("spark.jars.packages", SPARK_KAFKA_PACKAGE)
+        .config("spark.jars.packages", SPARK_PACKAGES)
         .config("spark.sql.streaming.checkpointLocation", str(CHECKPOINT_PATH))
         .getOrCreate()
     )
