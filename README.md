@@ -6,25 +6,64 @@
 
 E-Commerce pipeline: CSV → Kafka Producer (Avro) → Spark Structured Streaming → Parquet.
 
-### Быстрый старт
+### Обоснование выбора технологий
+
+**Avro** (вместо Protobuf):
+- Нативная интеграция с Kafka и Spark (`from_avro` из коробки)
+- Self-describing формат, поддержка эволюции схемы
+- Стандарт для data pipelines
+
+**Parquet** (вместо ORC):
+- Индустриальный стандарт для аналитики (pandas, DuckDB, Spark, BigQuery)
+- Эффективное колоночное сжатие, predicate pushdown
+
+### Запуск
+
+#### Вариант 1: Kafka в Docker, сервисы локально
 
 ```bash
-# 1. Установить зависимости
+# Установить зависимости
 poetry install
 
-# 2. Запустить инфраструктуру (Kafka KRaft)
+# Запустить Kafka (KRaft)
 docker compose up -d
 
-# 3. Запустить consumer (Spark Streaming)
+# Терминал 1: запустить consumer (Spark Streaming → Parquet)
 poetry run python -m src.lab1.consumer
 
-# 4. В другом терминале — запустить producer
+# Терминал 2: запустить producer (CSV → Kafka)
 poetry run python -m src.lab1.producer
 ```
 
-### Технологии
+#### Вариант 2: всё в Docker
 
-- **Сериализация**: Avro (fastavro)
-- **Брокер**: Apache Kafka (KRaft mode)
-- **Обработка**: PySpark Structured Streaming
-- **Хранение**: Parquet (partitioned by Country)
+```bash
+docker compose --profile lab1 up --build
+```
+
+#### Остановка
+
+```bash
+docker compose --profile lab1 down
+docker network prune -f
+```
+
+### Параметры producer
+
+```
+--csv-path        путь к CSV (default: data/lab1/E-Commerce Data.csv)
+--bootstrap-servers  адрес Kafka (default: localhost:9092)
+--topic           имя топика (default: ecommerce-transactions)
+--batch-size      размер чанка CSV (default: 500)
+--delay           задержка между батчами в секундах (default: 0.1)
+```
+
+### Результат
+
+Parquet-файлы записываются в `output/lab1/`, партиционированные по `Country`.
+
+### Тесты
+
+```bash
+poetry run pytest tests/ -v
+```
