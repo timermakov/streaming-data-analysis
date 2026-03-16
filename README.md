@@ -22,7 +22,7 @@ E-Commerce pipeline: CSV → Kafka Producer (Avro) → Spark Structured Streamin
 #### Вариант 1: Kafka в Docker, сервисы локально
 
 ```bash
-#  зависимости
+# Установить зависимости
 poetry install
 
 # Запустить Kafka (KRaft)
