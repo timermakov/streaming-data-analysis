@@ -12,7 +12,7 @@ from src.lab1.config import (
     KAFKA_TOPIC,
     OUTPUT_PATH,
 )
-from src.lab1.schema import AVRO_SCHEMA_JSON
+from src.common.ecommerce_avro import AVRO_SCHEMA_JSON
 
 logging.basicConfig(
     level=logging.INFO,

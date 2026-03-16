@@ -3,11 +3,10 @@
 import argparse
 import logging
 import signal
-import sys
 import time
 
 import pandas as pd
-from confluent_kafka import KafkaError, Producer
+from confluent_kafka import Producer
 
 from src.lab1.config import (
     CSV_PATH,
@@ -16,7 +15,7 @@ from src.lab1.config import (
     PRODUCER_BATCH_SIZE,
     PRODUCER_SEND_DELAY,
 )
-from src.lab1.schema import csv_row_to_record, serialize
+from src.common.ecommerce_avro import csv_row_to_record, serialize
 
 logging.basicConfig(
     level=logging.INFO,
