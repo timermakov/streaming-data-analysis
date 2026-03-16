@@ -1,6 +1,5 @@
-"""Kafka Producer: reads CSV and sends Avro-serialized records to Kafka."""
+"""Kafka producer for Lab2 using shared E-Commerce Avro format."""
 
-import argparse
 import logging
 import signal
 import time
@@ -8,36 +7,37 @@ import time
 import pandas as pd
 from confluent_kafka import Producer
 
-from src.lab1.config import Lab1Config, load_config
 from src.common.ecommerce_avro import csv_row_to_record, serialize
+from src.lab2.config import load_config
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 _shutdown = False
 
 
 def _signal_handler(sig, frame):
+    del sig, frame
     global _shutdown
     logger.info("Shutdown signal received, finishing current batch...")
     _shutdown = True
 
 
-def delivery_callback(err, msg):
+def _delivery_callback(err, msg):
+    del msg
     if err:
         logger.error("Delivery failed: %s", err)
 
 
 def create_producer(bootstrap_servers: str) -> Producer:
-    return Producer({
-        "bootstrap.servers": bootstrap_servers,
-        "linger.ms": 50,
-        "batch.num.messages": 1000,
-        "compression.type": "snappy",
-    })
+    return Producer(
+        {
+            "bootstrap.servers": bootstrap_servers,
+            "linger.ms": 50,
+            "batch.num.messages": 1000,
+            "compression.type": "snappy",
+        }
+    )
 
 
 def produce_messages(
@@ -58,13 +58,13 @@ def produce_messages(
                 break
 
             record = csv_row_to_record(row.to_dict())
-            data = serialize(record)
+            payload = serialize(record)
 
             producer.produce(
                 topic,
-                value=data,
+                value=payload,
                 key=record["InvoiceNo"].encode("utf-8"),
-                callback=delivery_callback,
+                callback=_delivery_callback,
             )
             total_sent += 1
 
@@ -78,38 +78,24 @@ def produce_messages(
     return total_sent
 
 
-def parse_args(config: Lab1Config) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Kafka Avro Producer for E-Commerce data")
-    parser.add_argument("--csv-path", type=str, default=str(config.paths.csv_path))
-    parser.add_argument("--bootstrap-servers", type=str, default=config.kafka.bootstrap_servers)
-    parser.add_argument("--topic", type=str, default=config.kafka.topic)
-    parser.add_argument("--batch-size", type=int, default=config.producer.batch_size)
-    parser.add_argument("--delay", type=float, default=config.producer.send_delay_seconds)
-    return parser.parse_args()
-
-
 def main():
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
     config = load_config()
-    args = parse_args(config)
-
+    producer = create_producer(config.kafka.bootstrap_servers)
     logger.info(
-        "Starting producer: topic=%s, servers=%s, batch=%d, delay=%.2fs",
-        args.topic, args.bootstrap_servers, args.batch_size, args.delay,
+        "Starting producer for topic=%s on %s",
+        config.kafka.topic,
+        config.kafka.bootstrap_servers,
     )
-
-    producer = create_producer(args.bootstrap_servers)
-
     total = produce_messages(
         producer=producer,
-        csv_path=args.csv_path,
-        topic=args.topic,
-        batch_size=args.batch_size,
-        send_delay=args.delay,
+        csv_path=str(config.paths.csv_path),
+        topic=config.kafka.topic,
+        batch_size=config.producer.batch_size,
+        send_delay=config.producer.send_delay_seconds,
     )
-
     logger.info("Done. Total records sent: %d", total)
 
 

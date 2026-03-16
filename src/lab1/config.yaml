@@ -1,0 +1,12 @@
+kafka:
+  bootstrap_servers: localhost:9092
+  topic: ecommerce-transactions
+
+paths:
+  csv_path: data/lab1/E-Commerce Data.csv
+  output_path: output/lab1
+  checkpoint_path: checkpoints/lab1
+
+producer:
+  batch_size: 500
+  send_delay_seconds: 0.1

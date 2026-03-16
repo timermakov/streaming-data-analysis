@@ -1,0 +1,21 @@
+kafka:
+  bootstrap_servers: localhost:9092
+  topic: ecommerce-transactions
+  group_id: lab2-flink-consumer
+
+paths:
+  csv_path: data/lab1/E-Commerce Data.csv
+  output_path: output/lab2
+  checkpoint_path: checkpoints/lab2
+  savepoint_path: savepoints/lab2
+
+producer:
+  batch_size: 500
+  send_delay_seconds: 0.05
+
+flink:
+  checkpoint_interval_ms: 5000
+  min_pause_between_checkpoints_ms: 500
+  checkpoint_timeout_ms: 60000
+  max_concurrent_checkpoints: 1
+  slowdown_seconds: 0.0

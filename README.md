@@ -62,6 +62,59 @@ docker network prune -f
 
 Parquet-файлы записываются в `output/lab1/`, партиционированные по `Country`.
 
+## Lab 2: Kafka + Flink
+
+E-Commerce pipeline: CSV -> Kafka Producer (Avro) -> PyFlink DataStream -> Parquet.
+
+- Flink job читает из Kafka topic `ecommerce-transactions`.
+- Включены checkpoint каждые 5 секунд.
+- Настроены директории состояния:
+  - checkpoints: `checkpoints/lab2`
+  - savepoints: `savepoints/lab2`
+- Есть скрипт верификации количества строк в parquet.
+- Настройки находятся в `src/lab2/config.yaml`.
+
+### Запуск (Windows bash, через Docker)
+
+```bash
+# 1) Поднять Kafka + Flink cluster
+docker compose --profile lab2 up -d kafka kafbat-ui flink-jobmanager flink-taskmanager
+
+# 2) Отправить данные в Kafka
+docker compose --profile lab2 run --rm lab2-producer
+
+# 3) Запустить Flink job (detached)
+docker compose --profile lab2 run --rm lab2-submit
+```
+
+Flink WebUI: [http://localhost:8081](http://localhost:8081)  
+Kafka UI: [http://localhost:8080](http://localhost:8080)
+
+### Остановка и запуск с savepoint
+
+```bash
+# Получить job id
+docker compose exec flink-jobmanager flink list -m flink-jobmanager:8081
+
+# Остановить job с savepoint
+docker compose exec flink-jobmanager flink stop `
+  --savepointPath file:///workspace/savepoints/lab2 `
+  -m flink-jobmanager:8081 <JOB_ID>
+
+# Запустить снова с savepoint
+docker compose exec flink-jobmanager flink run -d `
+  -m flink-jobmanager:8081 `
+  -s <SAVEPOINT_PATH> `
+  -py /workspace/src/lab2/flink_job.py `
+  --pyFiles /workspace/src
+```
+
+### Верификация
+
+```bash
+poetry run python -m src.lab2.verify_parquet
+```
+
 ### Тесты
 
 ```bash
