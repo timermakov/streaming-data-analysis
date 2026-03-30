@@ -150,13 +150,17 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       KAFKA_TOPIC: ecommerce-transactions
       KAFKA_GROUP_ID: lab2-flink-consumer
-    command: >
-      bash -lc "
-      sleep 10 &&
-      flink run -d -m flink-jobmanager:8081
-      -py /workspace/src/lab2/flink_job.py
-      --pyFiles /workspace/src
-      "
+    entrypoint:
+      - flink
+    command:
+      - run
+      - -d
+      - -m
+      - flink-jobmanager:8081
+      - -py
+      - /workspace/src/lab2/flink_job.py
+      - -pyfs
+      - /workspace/src
     volumes:
       - ./src:/workspace/src
       - ./data:/workspace/data:ro

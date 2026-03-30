@@ -1,25 +1,18 @@
-"""PyFlink DataStream job: Kafka (Avro bytes) -> Parquet."""
-
 import logging
 import time
 from pathlib import Path
 from typing import Iterable
 
-from pyflink.common import Configuration, Types
-from pyflink.common.serialization import DeserializationSchema
-from pyflink.common.watermark_strategy import WatermarkStrategy
+from pyflink.common import Configuration
 from pyflink.datastream import (
     CheckpointingMode,
     RuntimeExecutionMode,
     StreamExecutionEnvironment,
 )
-from pyflink.datastream.checkpoint_config import ExternalizedCheckpointCleanup
-from pyflink.datastream.connectors.file_system import FileSink
-from pyflink.datastream.connectors.kafka import KafkaOffsetsInitializer, KafkaSource
-from pyflink.datastream.formats.parquet import ParquetBulkWriters
-from pyflink.datastream.functions import MapFunction
+from pyflink.datastream.checkpoint_config import ExternalizedCheckpointRetention
+from pyflink.table import DataTypes, EnvironmentSettings, StreamTableEnvironment
+from pyflink.table.udf import udf
 
-from src.common.ecommerce_avro import deserialize
 from src.lab2.config import Lab2Config, load_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -30,66 +23,11 @@ def _as_file_uri(path: Path) -> str:
     return path.resolve().as_uri()
 
 
-class RawBytesDeserializationSchema(DeserializationSchema):
-    """Pass-through deserialization schema for Kafka values."""
-
-    def deserialize(self, message: bytes) -> bytes:
-        return message
-
-    def is_end_of_stream(self, next_element: bytes) -> bool:
-        del next_element
-        return False
-
-    def get_produced_type(self):
-        return Types.PRIMITIVE_ARRAY(Types.BYTE())
-
-
-class AvroToRowMap(MapFunction):
-    """Decode Avro payload and map to a typed row."""
-
-    def __init__(self, slowdown_seconds: float):
-        self._slowdown_seconds = slowdown_seconds
-
-    def map(self, value: bytes):
-        if self._slowdown_seconds > 0:
-            time.sleep(self._slowdown_seconds)
-
-        record = deserialize(value)
-        return (
-            record["InvoiceNo"],
-            record["StockCode"],
-            record["Description"],
-            int(record["Quantity"]),
-            record["InvoiceDate"],
-            float(record["UnitPrice"]),
-            record["CustomerID"],
-            record["Country"],
-        )
-
-
-def create_row_type():
-    return Types.ROW_NAMED(
-        [
-            "InvoiceNo",
-            "StockCode",
-            "Description",
-            "Quantity",
-            "InvoiceDate",
-            "UnitPrice",
-            "CustomerID",
-            "Country",
-        ],
-        [
-            Types.STRING(),
-            Types.STRING(),
-            Types.STRING(),
-            Types.INT(),
-            Types.STRING(),
-            Types.DOUBLE(),
-            Types.LONG(),
-            Types.STRING(),
-        ],
-    )
+@udf(result_type=DataTypes.STRING())
+def delay_string(value: str, slowdown_seconds: float) -> str:
+    if slowdown_seconds > 0:
+        time.sleep(slowdown_seconds)
+    return value
 
 
 def ensure_directories(paths: Iterable[Path]):
@@ -124,39 +62,93 @@ def create_environment(config: Lab2Config) -> StreamExecutionEnvironment:
     checkpoint_config.set_max_concurrent_checkpoints(
         config.flink.max_concurrent_checkpoints
     )
-    checkpoint_config.set_externalized_checkpoint_cleanup(
-        ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION
+    checkpoint_config.set_externalized_checkpoint_retention(
+        ExternalizedCheckpointRetention.RETAIN_ON_CANCELLATION
     )
     return env
 
 
-def build_pipeline(env: StreamExecutionEnvironment, config: Lab2Config):
-    row_type = create_row_type()
-
-    source = (
-        KafkaSource.builder()
-        .set_bootstrap_servers(config.kafka.bootstrap_servers)
-        .set_topics(config.kafka.topic)
-        .set_group_id(config.kafka.group_id)
-        .set_starting_offsets(KafkaOffsetsInitializer.earliest())
-        .set_value_only_deserializer(RawBytesDeserializationSchema())
-        .build()
+def create_table_environment(
+    env: StreamExecutionEnvironment,
+    config: Lab2Config,
+) -> StreamTableEnvironment:
+    settings = EnvironmentSettings.in_streaming_mode()
+    table_env = StreamTableEnvironment.create(
+        stream_execution_environment=env,
+        environment_settings=settings,
     )
-
-    stream = env.from_source(source, WatermarkStrategy.no_watermarks(), "kafka-source")
-    rows = stream.map(
-        AvroToRowMap(config.flink.slowdown_seconds),
-        output_type=row_type,
-    ).name("avro-to-row")
-
-    sink = (
-        FileSink.for_bulk_format(
-            _as_file_uri(config.paths.output_path),
-            ParquetBulkWriters.for_row_type(row_type),
-        )
-        .build()
+    table_env.create_temporary_function("delay_string", delay_string)
+    table_env.get_config().set(
+        "table.exec.source.idle-timeout",
+        "5 s",
     )
-    rows.sink_to(sink).name("parquet-sink")
+    table_env.get_config().set(
+        "pipeline.name",
+        "lab2-kafka-flink-parquet",
+    )
+    return table_env
+
+
+def create_source_table(table_env: StreamTableEnvironment, config: Lab2Config):
+    source_ddl = f"""
+    CREATE TABLE ecommerce_source (
+        InvoiceNo STRING NOT NULL,
+        StockCode STRING NOT NULL,
+        Description STRING,
+        Quantity INT NOT NULL,
+        InvoiceDate STRING NOT NULL,
+        UnitPrice DOUBLE NOT NULL,
+        CustomerID BIGINT,
+        Country STRING NOT NULL
+    ) WITH (
+        'connector' = 'kafka',
+        'topic' = '{config.kafka.topic}',
+        'properties.bootstrap.servers' = '{config.kafka.bootstrap_servers}',
+        'properties.group.id' = '{config.kafka.group_id}',
+        'scan.startup.mode' = 'earliest-offset',
+        'format' = 'avro',
+        'avro.encoding' = 'binary'
+    )
+    """
+    table_env.execute_sql(source_ddl)
+
+
+def create_sink_table(table_env: StreamTableEnvironment, config: Lab2Config):
+    sink_ddl = f"""
+    CREATE TABLE ecommerce_sink (
+        InvoiceNo STRING NOT NULL,
+        StockCode STRING NOT NULL,
+        Description STRING,
+        Quantity INT NOT NULL,
+        InvoiceDate STRING NOT NULL,
+        UnitPrice DOUBLE NOT NULL,
+        CustomerID BIGINT,
+        Country STRING NOT NULL
+    ) PARTITIONED BY (Country) WITH (
+        'connector' = 'filesystem',
+        'path' = '{_as_file_uri(config.paths.output_path)}',
+        'format' = 'parquet'
+    )
+    """
+    table_env.execute_sql(sink_ddl)
+
+
+def submit_insert_job(table_env: StreamTableEnvironment, config: Lab2Config):
+    slowdown_seconds = config.flink.slowdown_seconds
+    query = f"""
+    INSERT INTO ecommerce_sink
+    SELECT
+        delay_string(InvoiceNo, CAST({slowdown_seconds} AS DOUBLE)) AS InvoiceNo,
+        StockCode,
+        Description,
+        Quantity,
+        InvoiceDate,
+        UnitPrice,
+        CustomerID,
+        Country
+    FROM ecommerce_source
+    """
+    return table_env.execute_sql(query)
 
 
 def main():
@@ -169,7 +161,9 @@ def main():
         ]
     )
     env = create_environment(job_config)
-    build_pipeline(env, job_config)
+    table_env = create_table_environment(env, job_config)
+    create_source_table(table_env, job_config)
+    create_sink_table(table_env, job_config)
 
     logger.info(
         (
@@ -182,7 +176,10 @@ def main():
         job_config.paths.checkpoint_path,
         job_config.paths.savepoint_path,
     )
-    env.execute("lab2-kafka-flink-parquet")
+    result = submit_insert_job(table_env, job_config)
+    job_client = result.get_job_client()
+    if job_client:
+        logger.info("Submitted Flink job with id=%s", job_client.get_job_id())
 
 
 if __name__ == "__main__":
