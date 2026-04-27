@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 import logging
@@ -22,25 +21,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ParsedEvent:
-    event_id: str
-    user_id: str
-    event_type: str
-    event_time: str
-    event_time_millis: int
-
-    @staticmethod
-    def from_payload(payload: str) -> "ParsedEvent":
-        data = json.loads(payload)
-        event_time = str(data["event_time"])
-        return ParsedEvent(
-            event_id=str(data["event_id"]),
-            user_id=str(data["user_id"]),
-            event_type=str(data["event_type"]),
-            event_time=event_time,
-            event_time_millis=parse_event_time_to_millis(event_time),
-        )
+def parse_payload(payload: str) -> tuple[str, str, str, str, int]:
+    data = json.loads(payload)
+    event_time = str(data["event_time"])
+    return (
+        str(data["event_id"]),
+        str(data["user_id"]),
+        str(data["event_type"]),
+        event_time,
+        parse_event_time_to_millis(event_time),
+    )
 
 
 def _millis_to_utc_iso(timestamp_ms: int) -> str:
@@ -49,9 +39,9 @@ def _millis_to_utc_iso(timestamp_ms: int) -> str:
 
 
 class ParsedEventTimestampAssigner(TimestampAssigner):
-    def extract_timestamp(self, value: ParsedEvent, record_timestamp: int) -> int:
+    def extract_timestamp(self, value: tuple[str, str, str, str, int], record_timestamp: int) -> int:
         del record_timestamp
-        return value.event_time_millis
+        return value[4]
 
 
 class WindowCountProcessFunction(ProcessWindowFunction):
@@ -112,9 +102,31 @@ def build_pipeline(env: StreamExecutionEnvironment, config: Lab3Config) -> None:
         watermark_strategy=watermark,
         source_name="lab3-kafka-source",
     )
-    parsed_events = stream.map(lambda payload: ParsedEvent.from_payload(payload))
+    parsed_events = stream.map(
+        parse_payload,
+        output_type=Types.TUPLE(
+            [
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.LONG(),
+            ]
+        ),
+    )
 
-    late_events_tag = OutputTag("late-events", Types.PICKLED_BYTE_ARRAY())
+    late_events_tag = OutputTag(
+        "late-events",
+        Types.TUPLE(
+            [
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.STRING(),
+                Types.LONG(),
+            ]
+        ),
+    )
     windowed = (
         parsed_events.key_by(lambda _: "all-events")
         .window(TumblingEventTimeWindows.of(Time.seconds(config.flink.window_size_seconds)))
@@ -128,7 +140,13 @@ def build_pipeline(env: StreamExecutionEnvironment, config: Lab3Config) -> None:
     late_events = counts.get_side_output(late_events_tag)
     (
         late_events.map(
-            lambda event: f"late-event:{event}",
+            lambda event: (
+                "late-event:"
+                f"event_id={event[0]},"
+                f"user_id={event[1]},"
+                f"type={event[2]},"
+                f"event_time={event[3]}"
+            ),
             output_type=Types.STRING(),
         ).print()
     )
