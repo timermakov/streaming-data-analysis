@@ -1,0 +1,26 @@
+kafka:
+  bootstrap_servers: localhost:9092
+  topic: lab3-events
+  group_id: lab3-flink-consumer
+
+producer:
+  events_count: 300
+  send_delay_seconds: 0.03
+  buffer_size: 8
+  out_of_order_probability: 0.25
+  late_probability: 0.12
+  late_release_every: 7
+  event_interval_ms: 1000
+  user_id_min: 1
+  user_id_max: 100
+  event_types:
+    - click
+    - view
+    - purchase
+    - add_to_cart
+
+flink:
+  window_size_seconds: 10
+  watermark_out_of_orderness_seconds: 5
+  allowed_lateness_seconds: 5
+

@@ -134,3 +134,60 @@ Docker:
 Kafka (Avro messages):
 ![kafka](kafka_msg.png)
 ![kafka all](kafka_all.png)
+
+## Lab 3: Kafka + Flink DataStream (Event Time Windows)
+
+Pipeline: synthetic events -> Kafka producer (normal / out_of_order / late) -> PyFlink DataStream window aggregation by `event_time`.
+
+### Event schema
+
+Each event contains:
+- `event_id`
+- `user_id`
+- `event_type`
+- `event_time` (RFC3339 UTC, for example `2026-04-27T12:15:30.123Z`)
+
+### Run (Windows PowerShell)
+
+```powershell
+# 1) Start Kafka + Flink cluster for lab3 profile
+docker compose --profile lab3 up -d kafka kafbat-ui flink-jobmanager flink-taskmanager
+
+# 2) Submit Flink job (detached)
+docker compose --profile lab3 run --rm --remove-orphans lab3-submit
+
+# 3) Produce events (late mode by default)
+docker compose --profile lab3 run --rm lab3-producer
+```
+
+Flink WebUI: [http://localhost:8081](http://localhost:8081)  
+Kafka UI: [http://localhost:8080](http://localhost:8080)
+
+### Producer modes
+
+```powershell
+# mostly ordered stream
+docker compose --profile lab3 run --rm lab3-producer python -m src.lab3.producer --mode normal
+
+# occasional reordering from buffer
+docker compose --profile lab3 run --rm lab3-producer python -m src.lab3.producer --mode out_of_order
+
+# delayed and late events
+docker compose --profile lab3 run --rm lab3-producer python -m src.lab3.producer --mode late
+```
+
+### What Flink does
+
+- Reads JSON events from Kafka topic `lab3-events`
+- Extracts event-time from `event_time`
+- Applies bounded out-of-orderness watermarks
+- Uses tumbling event-time windows
+- Applies allowed lateness and prints late side-output
+- Prints window counts to console
+
+### Stop
+
+```powershell
+docker compose --profile lab3 down
+docker network prune -f
+```

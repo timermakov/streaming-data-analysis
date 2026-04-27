@@ -94,6 +94,7 @@ services:
       - ./savepoints:/workspace/savepoints
     profiles:
       - lab2
+      - lab3
 
   flink-taskmanager:
     build:
@@ -115,6 +116,7 @@ services:
       - ./savepoints:/workspace/savepoints
     profiles:
       - lab2
+      - lab3
 
   lab2-producer:
     build:
@@ -169,6 +171,59 @@ services:
       - ./savepoints:/workspace/savepoints
     profiles:
       - lab2
+
+  lab3-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab3-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_TOPIC: lab3-events
+      LAB3_EVENTS_COUNT: 400
+    command: python -m src.lab3.producer --mode late
+    profiles:
+      - lab3
+
+  lab3-submit:
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
+    container_name: lab3-flink-submit
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+      flink-taskmanager:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /workspace
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_TOPIC: lab3-events
+      KAFKA_GROUP_ID: lab3-flink-consumer
+    entrypoint:
+      - flink
+    command:
+      - run
+      - -d
+      - -m
+      - flink-jobmanager:8081
+      - -py
+      - /workspace/src/lab3/flink_job.py
+      - -pyfs
+      - /workspace/src
+    volumes:
+      - ./src:/workspace/src
+      - ./data:/workspace/data:ro
+      - ./output:/workspace/output
+      - ./checkpoints:/workspace/checkpoints
+      - ./savepoints:/workspace/savepoints
+    profiles:
+      - lab3
 
 volumes:
   kafka-data:
