@@ -72,5 +72,103 @@ services:
     profiles:
       - lab1
 
+  flink-jobmanager:
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
+    container_name: lab2-flink-jobmanager
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+      PYTHONPATH: /workspace
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./src:/workspace/src
+      - ./data:/workspace/data:ro
+      - ./output:/workspace/output
+      - ./checkpoints:/workspace/checkpoints
+      - ./savepoints:/workspace/savepoints
+    profiles:
+      - lab2
+
+  flink-taskmanager:
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
+    container_name: lab2-flink-taskmanager
+    command: taskmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+      PYTHONPATH: /workspace
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+    volumes:
+      - ./src:/workspace/src
+      - ./data:/workspace/data:ro
+      - ./output:/workspace/output
+      - ./checkpoints:/workspace/checkpoints
+      - ./savepoints:/workspace/savepoints
+    profiles:
+      - lab2
+
+  lab2-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab2-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_TOPIC: ecommerce-transactions
+    command: python -m src.lab2.producer
+    volumes:
+      - ./data:/app/data:ro
+    profiles:
+      - lab2
+
+  lab2-submit:
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
+    container_name: lab2-flink-submit
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+      flink-taskmanager:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /workspace
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_TOPIC: ecommerce-transactions
+      KAFKA_GROUP_ID: lab2-flink-consumer
+    entrypoint:
+      - flink
+    command:
+      - run
+      - -d
+      - -m
+      - flink-jobmanager:8081
+      - -py
+      - /workspace/src/lab2/flink_job.py
+      - -pyfs
+      - /workspace/src
+    volumes:
+      - ./src:/workspace/src
+      - ./data:/workspace/data:ro
+      - ./output:/workspace/output
+      - ./checkpoints:/workspace/checkpoints
+      - ./savepoints:/workspace/savepoints
+    profiles:
+      - lab2
+
 volumes:
   kafka-data:

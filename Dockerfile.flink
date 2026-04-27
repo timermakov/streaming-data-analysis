@@ -1,0 +1,30 @@
+FROM flink:2.2.0-scala_2.12-java17
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-venv python3-dev build-essential curl && \
+    (curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.1-2.0/flink-sql-connector-kafka-4.0.1-2.0.jar" \
+    -o /opt/flink/lib/flink-sql-connector-kafka.jar || \
+    curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.0-2.0/flink-sql-connector-kafka-4.0.0-2.0.jar" \
+    -o /opt/flink/lib/flink-sql-connector-kafka.jar) && \
+    curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro/2.2.0/flink-sql-avro-2.2.0.jar" \
+    -o /opt/flink/lib/flink-sql-avro.jar && \
+    curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-parquet/2.2.0/flink-sql-parquet-2.2.0.jar" \
+    -o /opt/flink/lib/flink-sql-parquet.jar && \
+    curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-shaded-hadoop-2-uber/2.8.3-10.0/flink-shaded-hadoop-2-uber-2.8.3-10.0.jar" \
+    -o /opt/flink/lib/flink-shaded-hadoop.jar && \
+    python3 -m venv /opt/flink-venv && \
+    /opt/flink-venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    /opt/flink-venv/bin/pip install --no-cache-dir apache-flink==2.2.0 fastavro pandas pyyaml && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY src/ src/
+COPY data/ data/
+
+ENV PATH=/opt/flink-venv/bin:$PATH
+ENV PYTHONPATH=/workspace
+
+USER flink
