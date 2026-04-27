@@ -10,10 +10,14 @@ import logging
 import random
 import signal
 import time
+from typing import Any
 from typing import Iterable, Literal
 from uuid import uuid4
 
-from confluent_kafka import Producer
+try:
+    from confluent_kafka import Producer as KafkaProducer
+except ModuleNotFoundError:  # pragma: no cover - handled at runtime
+    KafkaProducer = Any  # type: ignore[assignment]
 
 from src.lab3.config import Lab3Config, ProducerConfig, load_config
 from src.lab3.models import StreamEvent, format_event_time
@@ -38,8 +42,13 @@ def _delivery_callback(err, msg) -> None:
         logger.error("Delivery failed: %s", err)
 
 
-def create_producer(bootstrap_servers: str) -> Producer:
-    return Producer(
+def create_producer(bootstrap_servers: str) -> KafkaProducer:
+    if KafkaProducer is Any:
+        raise RuntimeError(
+            "confluent_kafka is not installed. Install dependencies with `poetry install`."
+        )
+
+    return KafkaProducer(
         {
             "bootstrap.servers": bootstrap_servers,
             "linger.ms": 25,
@@ -108,7 +117,7 @@ def _pop_next_event(
 
 
 def _dispatch_event(
-    producer: Producer,
+    producer: KafkaProducer,
     topic: str,
     event: StreamEvent,
 ) -> None:
@@ -134,7 +143,7 @@ def _assign_to_buffers(
 
 
 def _flush_buffers(
-    producer: Producer,
+    producer: KafkaProducer,
     topic: str,
     state: DispatchState,
     mode: ProducerMode,
@@ -165,7 +174,7 @@ def _flush_buffers(
 
 
 def produce_messages(
-    producer: Producer,
+    producer: KafkaProducer,
     config: Lab3Config,
     mode: ProducerMode,
     rng: random.Random | None = None,
