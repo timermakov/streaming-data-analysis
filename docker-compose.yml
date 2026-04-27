@@ -42,7 +42,7 @@ services:
   producer:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.producer
     container_name: lab1-producer
     depends_on:
       kafka:
@@ -121,7 +121,7 @@ services:
   lab2-producer:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.producer
     container_name: lab2-producer
     depends_on:
       kafka:
@@ -175,7 +175,7 @@ services:
   lab3-producer:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.producer
     container_name: lab3-producer
     depends_on:
       kafka:
