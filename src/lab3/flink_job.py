@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 import json
 import logging
 
-from pyflink.common import Duration, RuntimeExecutionMode, Time, Types
+from pyflink.common import Duration, Time, Types
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.watermark_strategy import TimestampAssigner, WatermarkStrategy
-from pyflink.datastream import OutputTag, StreamExecutionEnvironment
+from pyflink.datastream import OutputTag, RuntimeExecutionMode, StreamExecutionEnvironment
 from pyflink.datastream.connectors.kafka import KafkaOffsetsInitializer, KafkaSource
 from pyflink.datastream.functions import ProcessWindowFunction
 from pyflink.datastream.window import TimeWindow, TumblingEventTimeWindows
@@ -128,13 +128,7 @@ def build_pipeline(env: StreamExecutionEnvironment, config: Lab3Config) -> None:
     late_events = counts.get_side_output(late_events_tag)
     (
         late_events.map(
-            lambda event: (
-                "late-event:"
-                f"event_id={event.event_id},"
-                f"user_id={event.user_id},"
-                f"type={event.event_type},"
-                f"event_time={event.event_time}"
-            ),
+            lambda event: f"late-event:{event}",
             output_type=Types.STRING(),
         ).print()
     )
