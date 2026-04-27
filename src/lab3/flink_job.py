@@ -118,7 +118,7 @@ def build_pipeline(env: StreamExecutionEnvironment, config: Lab3Config) -> None:
     windowed = (
         parsed_events.key_by(lambda _: "all-events")
         .window(TumblingEventTimeWindows.of(Time.seconds(config.flink.window_size_seconds)))
-        .allowed_lateness(Time.seconds(config.flink.allowed_lateness_seconds))
+        .allowed_lateness(config.flink.allowed_lateness_seconds * 1000)
         .side_output_late_data(late_events_tag)
     )
 
