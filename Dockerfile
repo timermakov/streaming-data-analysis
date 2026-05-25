@@ -1,7 +1,8 @@
 FROM python:3.13-slim
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends default-jre-headless && \
+RUN set -eux; \
+    apt-get update -o Acquire::Retries=5; \
+    apt-get install -y --no-install-recommends --fix-missing default-jre-headless; \
     rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
