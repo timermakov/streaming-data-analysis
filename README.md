@@ -156,6 +156,14 @@ docker compose --profile lab3 up -d kafka kafbat-ui flink-jobmanager flink-taskm
 # 2) Submit Flink job (detached)
 docker compose --profile lab3 run --rm --remove-orphans lab3-submit
 
+Non-detached:
+
+docker compose --profile lab3 run --rm lab3-submit `
+  run `
+  -m flink-jobmanager:8081 `
+  -py /workspace/src/lab3/flink_job.py `
+  -pyfs /workspace/src
+
 # 3) Produce events (late mode by default)
 docker compose --profile lab3 run --rm lab3-producer
 ```
@@ -166,6 +174,8 @@ Kafka UI: [http://localhost:8080](http://localhost:8080)
 ### Producer modes
 
 ```powershell
+docker compose --profile lab3 build lab3-producer
+
 # mostly ordered stream
 docker compose --profile lab3 run --rm lab3-producer python -m src.lab3.producer --mode normal
 
